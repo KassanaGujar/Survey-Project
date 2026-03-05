@@ -95,7 +95,7 @@ html, body, [class*="css"] {
 
 # ── Data ──────────────────────────────────────────────────────────────────────
 SHEET_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vR7PRKvQbJgVMNPXwdfoep2xbJISE8C_eUHwThVCbU5WZtCk5pztx_ddv_1qjJO4GaVKf1uVmsqrmpE/pub?output=csv"
-@st.cache_data(ttl=120)
+@st.cache_data(ttl=30)
 def load_data():
     df = pd.read_csv(SHEET_URL)
     df.columns = df.columns.str.strip()
@@ -353,4 +353,5 @@ with tab4:
             st.markdown(f'<div class="card"><div class="card-title">{q}</div>', unsafe_allow_html=True)
             st.plotly_chart(stacked_bar(pd.DataFrame(rows), "Community", q),
                             use_container_width=True, config={"displayModeBar": False})
+
             st.markdown("</div>", unsafe_allow_html=True)
