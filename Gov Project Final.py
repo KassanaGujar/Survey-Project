@@ -16,6 +16,17 @@ st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Instrument+Sans:wght@300;400;500;600&display=swap');
 
+[data-testid="collapsedControl"] {
+  display: flex !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  pointer-events: auto !important;
+  position: fixed !important;
+  top: 0.5rem !important;
+  left: 0.5rem !important;
+  z-index: 999999 !important;
+}
+            
 html, body, [class*="css"] {
   font-family: 'Instrument Sans', sans-serif;
   background: #f5f2eb;
@@ -89,7 +100,9 @@ html, body, [class*="css"] {
 }
 [aria-selected="true"][data-baseweb="tab"] { color: #aaa !important; }
 
-#MainMenu, footer, header { visibility: hidden; }
+#MainMenu { visibility: hidden; }
+footer { visibility: hidden; }
+
 </style>
 """, unsafe_allow_html=True)
 
@@ -289,7 +302,7 @@ with tab1:
                   <div class="card-title">{q}</div>
                   <div class="card-sub">Top: <strong>{top}</strong> · {top_pct}%</div>
                 """, unsafe_allow_html=True)
-                st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+                st.plotly_chart(fig, width='stretch', config={"displayModeBar": False})
                 st.markdown("</div>", unsafe_allow_html=True)
 
 # ── Tab 2: Party Comparison ───────────────────────────────────────────────────
@@ -313,7 +326,7 @@ with tab2:
 
             st.markdown(f'<div class="card"><div class="card-title">{q}</div>', unsafe_allow_html=True)
             st.plotly_chart(stacked_bar(pd.DataFrame(rows), "Party", party_x),
-                            use_container_width=True, config={"displayModeBar": False})
+                            width='stretch', config={"displayModeBar": False})
             st.markdown("</div>", unsafe_allow_html=True)
 
 # ── Tab 3: Age Groups ─────────────────────────────────────────────────────────
@@ -337,7 +350,7 @@ with tab3:
 
             st.markdown(f'<div class="card"><div class="card-title">{q}</div>', unsafe_allow_html=True)
             st.plotly_chart(stacked_bar(pd.DataFrame(rows), "Age", age_x),
-                            use_container_width=True, config={"displayModeBar": False})
+                            width='stretch', config={"displayModeBar": False})
             st.markdown("</div>", unsafe_allow_html=True)
 
 # ── Tab 4: Communities ────────────────────────────────────────────────────────
@@ -361,5 +374,5 @@ with tab4:
 
             st.markdown(f'<div class="card"><div class="card-title">{q}</div>', unsafe_allow_html=True)
             st.plotly_chart(stacked_bar(pd.DataFrame(rows), "Community", comm_x),
-                            use_container_width=True, config={"displayModeBar": False})
+                            width='stretch', config={"displayModeBar": False})
             st.markdown("</div>", unsafe_allow_html=True)
