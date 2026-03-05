@@ -87,7 +87,7 @@ html, body, [class*="css"] {
   font-size: 1rem !important; letter-spacing: 0.06em !important;
   padding: 0.6rem 1.4rem !important; color: #aaa !important;
 }
-[aria-selected="true"][data-baseweb="tab"] { color: #1a1a1a !important; }
+[aria-selected="true"][data-baseweb="tab"] { color: #aaa !important; }
 
 #MainMenu, footer, header { visibility: hidden; }
 </style>
@@ -95,7 +95,8 @@ html, body, [class*="css"] {
 
 # ── Data ──────────────────────────────────────────────────────────────────────
 SHEET_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vR7PRKvQbJgVMNPXwdfoep2xbJISE8C_eUHwThVCbU5WZtCk5pztx_ddv_1qjJO4GaVKf1uVmsqrmpE/pub?output=csv"
-@st.cache_data(ttl=30)
+
+@st.cache_data(ttl=120)
 def load_data():
     df = pd.read_csv(SHEET_URL)
     df.columns = df.columns.str.strip()
@@ -104,15 +105,15 @@ def load_data():
 df_raw = load_data()
 all_cols = df_raw.columns.tolist()
 
-# Auto-detect key columns
-age_col   = next((c for c in all_cols if "age"  in c.lower()), None)
-party_col = next((c for c in all_cols if "party" in c.lower() or "political" in c.lower()), None)
+# ── Column detection ──────────────────────────────────────────────────────────
+age_col       = next((c for c in all_cols if "age"       in c.lower()), None)
+party_col     = next((c for c in all_cols if "party"     in c.lower() or "political" in c.lower()), None)
 community_col = next((c for c in all_cols if "community" in c.lower()), None)
 
-meta_cols     = {c for c in [age_col, party_col, all_cols[0]] if c}
+meta_cols     = {c for c in [age_col, party_col, community_col, all_cols[0]] if c}
 question_cols = [c for c in all_cols[1:] if c not in meta_cols]
 
-AGREE_VOCAB = {"agree","disagree","strongly agree","strongly disagree"}
+AGREE_VOCAB = {"agree", "disagree", "strongly agree", "strongly disagree"}
 
 def is_agree_col(series):
     vals = set(series.dropna().str.lower().unique())
@@ -120,12 +121,18 @@ def is_agree_col(series):
 
 agree_cols = [c for c in question_cols if df_raw[c].dtype == object and is_agree_col(df_raw[c])]
 
+# ── Constants ─────────────────────────────────────────────────────────────────
 AGREE_COLORS = {
     "strongly agree":    "#2d6a4f",
     "agree":             "#52b788",
     "disagree":          "#e76f51",
     "strongly disagree": "#c1121f",
 }
+ANSWER_ORDER    = ["strongly agree", "agree", "disagree", "strongly disagree"]
+AGE_ORDER       = ["Under 18", "18-29", "29-39", "39-49", "49-59", "60+"]
+PARTY_ORDER     = ["Democratic Party", "Republican Party", "Green Party",
+                   "Libertarian Party", "Prefer not to say/Don't know", "None of these"]
+COMMUNITY_ORDER = ["Urban", "Suburbs", "Rural"]
 
 def norm(v):
     return str(v).strip().lower() if pd.notna(v) else "unknown"
@@ -134,51 +141,49 @@ def get_color(val):
     return AGREE_COLORS.get(norm(val), "#aaa")
 
 # ── Sidebar ───────────────────────────────────────────────────────────────────
+selected_communities = []
+
 with st.sidebar:
     st.markdown("## Filters")
     st.markdown("---")
 
     if age_col:
-        age_opts = sorted(df_raw[age_col].dropna().unique().tolist())
-        all_ages = st.checkbox("select all age groups", value=True, key = "all ages")
+        age_opts = [a for a in AGE_ORDER if a in df_raw[age_col].dropna().unique().tolist()]
+        all_ages = st.checkbox("Select all age groups", value=True, key="all_ages")
         sel_ages = age_opts if all_ages else st.multiselect("Age Group", age_opts, default=age_opts)
     else:
         sel_ages = []
 
     if party_col:
-        party_opts = sorted(df_raw[party_col].dropna().unique().tolist())
-        all_parties = st.checkbox("select all parties", value=True, key = "all parties")
+        party_opts = [p for p in PARTY_ORDER if p in df_raw[party_col].dropna().unique().tolist()]
+        all_parties = st.checkbox("Select all parties", value=True, key="all_parties")
         sel_parties = party_opts if all_parties else st.multiselect("Political Party", party_opts, default=party_opts)
     else:
         sel_parties = []
-    
-    if community_col:
-        communities = sorted(df_raw[community_col].dropna().unique())
-        all_communities = st.checkbox("select all community types", value=True, key="all communities")
-        selected_communities = communities if all_communities else st.sidebar.multiselect("Community type", communities, default=communities)
-        df = df_raw[df_raw[community_col].isin(selected_communities)].copy()
-    else:
-        df = df_raw.copy()
 
+    if community_col:
+        comm_opts = [c for c in COMMUNITY_ORDER if c in df_raw[community_col].dropna().unique().tolist()]
+        all_comms = st.checkbox("Select all community types", value=True, key="all_comms")
+        selected_communities = comm_opts if all_comms else st.multiselect("Community Type", comm_opts, default=comm_opts)
+    
     st.markdown("---")
     st.markdown("## Questions")
     sel_qs = st.multiselect(
-        "Show questions",
-        agree_cols,
+        "Show questions", agree_cols,
         default=agree_cols[:6] if len(agree_cols) > 6 else agree_cols,
     )
     if not sel_qs:
         sel_qs = agree_cols
 
     st.markdown("---")
-    show_pct = st.toggle("Show percentages", value=True)
+    show_pct    = st.toggle("Show percentages", value=True)
     orientation = st.radio("Bar orientation", ["Horizontal", "Vertical"], index=0)
 
 # ── Apply filters ─────────────────────────────────────────────────────────────
 df = df_raw.copy()
-if age_col   and sel_ages:    df = df[df[age_col].isin(sel_ages)]
-if party_col and sel_parties: df = df[df[party_col].isin(sel_parties)]
-if community_col and 'selected_communities' in dir() and selected_communities: df = df[df[community_col].isin(selected_communities)]
+if age_col       and sel_ages:              df = df[df[age_col].isin(sel_ages)]
+if party_col     and sel_parties:           df = df[df[party_col].isin(sel_parties)]
+if community_col and selected_communities:  df = df[df[community_col].isin(selected_communities)]
 
 # ── Page header ───────────────────────────────────────────────────────────────
 st.markdown(f"""
@@ -196,21 +201,23 @@ st.markdown(f"""
 """, unsafe_allow_html=True)
 
 # ── Tabs ──────────────────────────────────────────────────────────────────────
-tab1, tab2, tab3, tab4 = st.tabs([
-    "Overview",
-    "Party Comparison",
-    "Age Groups",
-    "Communities",
-])
+tab1, tab2, tab3, tab4 = st.tabs(["Overview", "Party Comparison", "Age Groups", "Communities"])
 
-def stacked_bar(dq, x_col, title, height=260):
-    ANSWER_ORDER = ["strongly agree","agree","disagree","strongly disagree"]
+# ── stacked_bar helper ────────────────────────────────────────────────────────
+def stacked_bar(dq, x_col, x_order, height=260):
+    dq = dq.copy()
+    # Normalize answer to lowercase so colors match
+    dq["Answer"] = dq["Answer"].str.strip().str.lower()
+    # Apply categorical ordering BEFORE plotly sees the data
+    dq[x_col]    = pd.Categorical(dq[x_col], categories=x_order, ordered=True)
     dq["Answer"] = pd.Categorical(dq["Answer"], categories=ANSWER_ORDER, ordered=True)
-    dq = dq.sort_values("Answer")
+    dq = dq.sort_values([x_col, "Answer"])
+
     fig = px.bar(
         dq, x=x_col, y="Pct", color="Answer",
-        color_discrete_map={a: get_color(a) for a in dq["Answer"].unique()},
+        color_discrete_map={a: get_color(a) for a in ANSWER_ORDER},
         barmode="stack", text="Pct",
+        category_orders={x_col: x_order, "Answer": ANSWER_ORDER},
     )
     fig.update_traces(
         texttemplate="%{text:.0f}%", textposition="inside",
@@ -221,14 +228,15 @@ def stacked_bar(dq, x_col, title, height=260):
         paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
         font=dict(family="Instrument Sans"),
         margin=dict(l=4, r=4, t=10, b=10), height=height,
-        xaxis=dict(title="", tickfont=dict(size=12)),
+        xaxis=dict(title="", tickfont=dict(size=12),
+                   categoryorder="array", categoryarray=x_order),
         yaxis=dict(title="", showticklabels=False, showgrid=False, zeroline=False),
         legend=dict(orientation="h", yanchor="bottom", y=-0.45, font=dict(size=10), title=""),
         bargap=0.3,
     )
     return fig
 
-# ── Tab 1: Overview ──────────────────────────────────────────────────────────
+# ── Tab 1: Overview ───────────────────────────────────────────────────────────
 with tab1:
     st.markdown('<div class="sec-label">All filtered responses</div>', unsafe_allow_html=True)
     st.markdown('<div class="sec-title">How did people respond?</div>', unsafe_allow_html=True)
@@ -238,6 +246,7 @@ with tab1:
         for col, q in zip(cols, pair):
             with col:
                 counts = df[q].dropna().apply(norm).value_counts()
+                counts = counts.reindex(ANSWER_ORDER, fill_value=0)
                 vals   = (counts / counts.sum() * 100).round(1) if show_pct else counts
                 colors = [get_color(v) for v in vals.index]
                 suffix = "%" if show_pct else ""
@@ -247,7 +256,7 @@ with tab1:
                     fig = go.Figure(go.Bar(
                         x=vals.values, y=vals.index, orientation='h',
                         marker_color=colors, text=labels, textposition='outside',
-                        textfont=dict(size=11, color="#555"),
+                        textfont=dict(size=11, color="#ffffff"),
                     ))
                     fig.update_layout(
                         xaxis=dict(showgrid=False, showticklabels=False, zeroline=False),
@@ -258,7 +267,7 @@ with tab1:
                     fig = go.Figure(go.Bar(
                         x=vals.index, y=vals.values,
                         marker_color=colors, text=labels, textposition='outside',
-                        textfont=dict(size=11, color="#555"),
+                        textfont=dict(size=11, color="#ffffff"),
                     ))
                     fig.update_layout(
                         xaxis=dict(tickfont=dict(size=11), showgrid=False),
@@ -269,11 +278,11 @@ with tab1:
                 fig.update_layout(
                     paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
                     font=dict(family="Instrument Sans"),
-                    margin=dict(l=4, r=40, t=8, b=8), showlegend=False,
+                    margin=dict(l=4, r=60, t=8, b=8), showlegend=False,
                 )
 
                 top     = counts.index[0] if len(counts) else "—"
-                top_pct = int(counts.iloc[0]/counts.sum()*100) if len(counts) else 0
+                top_pct = int(counts.iloc[0] / counts.sum() * 100) if counts.sum() > 0 else 0
 
                 st.markdown(f"""
                 <div class="card">
@@ -291,19 +300,19 @@ with tab2:
         st.markdown('<div class="sec-label">By Political Party</div>', unsafe_allow_html=True)
         st.markdown('<div class="sec-title">Where do parties agree & diverge?</div>', unsafe_allow_html=True)
 
-        parties = sorted(df[party_col].dropna().unique())
+        party_x = [p for p in PARTY_ORDER if p in df[party_col].dropna().unique().tolist()]
 
         for q in sel_qs:
             rows = []
-            for p in parties:
+            for p in party_x:
                 sub = df[df[party_col] == p][q].dropna().apply(norm)
                 if len(sub) == 0: continue
-                for ans, pct in (sub.value_counts(normalize=True)*100).items():
-                    rows.append({"Party": p, "Answer": ans, "Pct": round(pct,1)})
+                for ans, pct in (sub.value_counts(normalize=True) * 100).items():
+                    rows.append({"Party": p, "Answer": ans, "Pct": round(pct, 1)})
             if not rows: continue
 
             st.markdown(f'<div class="card"><div class="card-title">{q}</div>', unsafe_allow_html=True)
-            st.plotly_chart(stacked_bar(pd.DataFrame(rows), "Party", q),
+            st.plotly_chart(stacked_bar(pd.DataFrame(rows), "Party", party_x),
                             use_container_width=True, config={"displayModeBar": False})
             st.markdown("</div>", unsafe_allow_html=True)
 
@@ -315,43 +324,42 @@ with tab3:
         st.markdown('<div class="sec-label">By Age Group</div>', unsafe_allow_html=True)
         st.markdown('<div class="sec-title">How do generations differ?</div>', unsafe_allow_html=True)
 
-        ages = sorted(df[age_col].dropna().unique())
+        age_x = [a for a in AGE_ORDER if a in df[age_col].dropna().unique().tolist()]
 
         for q in sel_qs:
             rows = []
-            for a in ages:
+            for a in age_x:
                 sub = df[df[age_col] == a][q].dropna().apply(norm)
                 if len(sub) == 0: continue
-                for ans, pct in (sub.value_counts(normalize=True)*100).items():
-                    rows.append({"Age": a, "Answer": ans, "Pct": round(pct,1)})
+                for ans, pct in (sub.value_counts(normalize=True) * 100).items():
+                    rows.append({"Age": a, "Answer": ans, "Pct": round(pct, 1)})
             if not rows: continue
 
             st.markdown(f'<div class="card"><div class="card-title">{q}</div>', unsafe_allow_html=True)
-            st.plotly_chart(stacked_bar(pd.DataFrame(rows), "Age", q),
+            st.plotly_chart(stacked_bar(pd.DataFrame(rows), "Age", age_x),
                             use_container_width=True, config={"displayModeBar": False})
             st.markdown("</div>", unsafe_allow_html=True)
 
-# ── Tab 4: Communities ────────────────────────────────────────────────────────────
+# ── Tab 4: Communities ────────────────────────────────────────────────────────
 with tab4:
     if not community_col:
-        st.warning("No Community column detected.")
+        st.warning("No community column detected.")
     else:
         st.markdown('<div class="sec-label">By Community</div>', unsafe_allow_html=True)
         st.markdown('<div class="sec-title">How does area affect responses?</div>', unsafe_allow_html=True)
 
-        communities = sorted(df[community_col].dropna().unique())
+        comm_x = [c for c in COMMUNITY_ORDER if c in df[community_col].dropna().unique().tolist()]
 
         for q in sel_qs:
             rows = []
-            for a in communities:
-                sub = df[df[community_col] == a][q].dropna().apply(norm)
+            for c in comm_x:
+                sub = df[df[community_col] == c][q].dropna().apply(norm)
                 if len(sub) == 0: continue
-                for ans, pct in (sub.value_counts(normalize=True)*100).items():
-                    rows.append({"Community": a, "Answer": ans, "Pct": round(pct,1)})
+                for ans, pct in (sub.value_counts(normalize=True) * 100).items():
+                    rows.append({"Community": c, "Answer": ans, "Pct": round(pct, 1)})
             if not rows: continue
 
             st.markdown(f'<div class="card"><div class="card-title">{q}</div>', unsafe_allow_html=True)
-            st.plotly_chart(stacked_bar(pd.DataFrame(rows), "Community", q),
+            st.plotly_chart(stacked_bar(pd.DataFrame(rows), "Community", comm_x),
                             use_container_width=True, config={"displayModeBar": False})
-
             st.markdown("</div>", unsafe_allow_html=True)
