@@ -4,6 +4,10 @@ import plotly.express as px
 import plotly.graph_objects as go
 import numpy as np
 
+# Initialize session state for light mode
+if 'light_mode' not in st.session_state:
+    st.session_state.light_mode = False
+
 # ── Page config ───────────────────────────────────────────────────────────────
 st.set_page_config(
     page_title="Survey Analysis",
@@ -29,8 +33,8 @@ st.markdown("""
             
 html, body, [class*="css"] {
   font-family: 'Instrument Sans', sans-serif;
-  background: #f5f2eb;
-  color: #1a1a1a;
+  background: #f5f2eb !important;
+  color: #1a1a1a !important;
 }
 .main .block-container { padding: 2rem 2.5rem; max-width: 1500px; }
 
@@ -160,6 +164,9 @@ with st.sidebar:
     st.markdown("## Filters")
     st.markdown("---")
 
+    light_mode_toggle = st.toggle("Light mode", value=st.session_state.light_mode)
+    st.session_state.light_mode = light_mode_toggle
+
     if age_col:
         age_opts = [a for a in AGE_ORDER if a in df_raw[age_col].dropna().unique().tolist()]
         all_ages = st.checkbox("Select all age groups", value=True, key="all_ages")
@@ -192,6 +199,34 @@ with st.sidebar:
     show_pct    = st.toggle("Show percentages", value=True)
     orientation = st.radio("Bar orientation", ["Horizontal", "Vertical"], index=0)
 
+# Apply light mode CSS if enabled
+if st.session_state.light_mode:
+    st.markdown("""
+    <style>
+html, body, [class*="css"] {
+  background: #eef0f2 !important;
+  color: #1a1a1a !important;
+}
+    .main { background: #eef0f2 !important; }
+    .main .block-container { background: #eef0f2 !important; }
+    [data-testid="stAppViewContainer"] { background: #eef0f2 !important; }
+    [data-testid="stApp"] { background: #eef0f2 !important; }
+    .page-title { color: #87CEEB !important; }
+    .page-meta { color: #888 !important; }
+    .sec-title { color: #87CEEB !important; }
+    .sec-label { color: #888888 !important; }
+    .stat-pill { background: #888 !important; color: #1a1a1a !important; }
+    .card { background: #1e1e1e !important; border-color: #2a2a2a !important; }
+    .card-title { color: #fff !important; }
+    .card-sub { color: #999 !important; }
+    .page-header { border-bottom-color: #333 !important; }
+    [data-baseweb="tab-list"] { border-bottom-color: #333 !important; }
+    [data-baseweb="tab"] { color: #555 !important; }
+    [aria-selected="true"][data-baseweb="tab"] { color: #333 !important; }
+    [data-testid="stSidebar"] { background: #1a1a1a !important; }
+    </style>
+    """, unsafe_allow_html=True)
+
 # ── Apply filters ─────────────────────────────────────────────────────────────
 df = df_raw.copy()
 if age_col       and sel_ages:              df = df[df[age_col].isin(sel_ages)]
@@ -217,6 +252,9 @@ st.markdown(f"""
 tab1, tab2, tab3, tab4 = st.tabs(["Overview", "Party Comparison", "Age Groups", "Communities"])
 
 # ── stacked_bar helper ────────────────────────────────────────────────────────
+
+label_color = "#1a1a1a" if st.session_state.light_mode else "#ffffff"
+
 def stacked_bar(dq, x_col, x_order, height=260):
     dq = dq.copy()
     # Normalize answer to lowercase so colors match
@@ -241,13 +279,14 @@ def stacked_bar(dq, x_col, x_order, height=260):
         paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
         font=dict(family="Instrument Sans"),
         margin=dict(l=4, r=4, t=10, b=10), height=height,
-        xaxis=dict(title="", tickfont=dict(size=12),
-                   categoryorder="array", categoryarray=x_order),
+        xaxis=dict(title="", tickfont=dict(size=12, color = label_color), categoryorder="array", categoryarray=x_order),
         yaxis=dict(title="", showticklabels=False, showgrid=False, zeroline=False),
-        legend=dict(orientation="h", yanchor="bottom", y=-0.45, font=dict(size=10), title=""),
+        legend=dict(orientation="h", yanchor="bottom", y=-0.45, font=dict(size=10, color = label_color), title=""),
         bargap=0.3,
     )
     return fig
+
+
 
 # ── Tab 1: Overview ───────────────────────────────────────────────────────────
 with tab1:
@@ -269,21 +308,21 @@ with tab1:
                     fig = go.Figure(go.Bar(
                         x=vals.values, y=vals.index, orientation='h',
                         marker_color=colors, text=labels, textposition='outside',
-                        textfont=dict(size=11, color="#ffffff"),
+                        textfont=dict(size=11, color= label_color),
                     ))
                     fig.update_layout(
                         xaxis=dict(showgrid=False, showticklabels=False, zeroline=False),
-                        yaxis=dict(showgrid=False, tickfont=dict(size=12)),
+                        yaxis=dict(showgrid=False, tickfont=dict(size=12, color=label_color)),
                         height=max(160, len(counts) * 42),
                     )
                 else:
                     fig = go.Figure(go.Bar(
                         x=vals.index, y=vals.values,
                         marker_color=colors, text=labels, textposition='outside',
-                        textfont=dict(size=11, color="#ffffff"),
+                        textfont=dict(size=11, color=label_color),
                     ))
                     fig.update_layout(
-                        xaxis=dict(tickfont=dict(size=11), showgrid=False),
+                        xaxis=dict(tickfont=dict(size=11, color=label_color), showgrid=False),
                         yaxis=dict(showgrid=False, showticklabels=False, zeroline=False),
                         height=260,
                     )
